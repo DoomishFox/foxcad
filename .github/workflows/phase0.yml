@@ -1,0 +1,44 @@
+name: Phase 0 desktop checks
+on:
+  workflow_dispatch:
+    inputs:
+      graphics_ref:
+        description: 'Published fox-graphics ref containing the Phase 0 renderer (not the old API)'
+        required: true
+        type: string
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: foxcad
+      - uses: actions/checkout@v4
+        with:
+          repository: DoomishFox/fox-graphics
+          ref: ${{ inputs.graphics_ref }}
+          path: fox-graphics
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libvulkan1 mesa-vulkan-drivers xvfb
+      - run: cargo fmt --all --check
+        working-directory: foxcad
+      - run: cargo test --locked
+        working-directory: foxcad
+      - run: cargo clippy --locked --all-targets -- -D warnings
+        working-directory: foxcad
+      - name: Linux window and software GPU smoke
+        if: runner.os == 'Linux'
+        run: xvfb-run -a cargo run --locked -- --smoke-test
+        working-directory: foxcad
+      - name: Native window and GPU smoke
+        if: runner.os != 'Linux'
+        run: cargo run --locked -- --smoke-test
+        working-directory: foxcad
